@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>香港街景駕駛模擬</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#000;font-family:system-ui, sans-serif;color:#fff}
+#info{position:absolute;bottom:20px;left:20px;background:rgba(0,0,0,0.6);padding:12px;z-index:10;font-size:16px;line-height:1.5}
+#joystick{position:absolute;bottom:20px;right:20px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.2);touch-action:none}
+#stick{position:absolute;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.5);left:50%;top:50%;transform:translate(-50%,-50%)}
+</style>
+</head>
+<body>
+<div id="info">速度：0 km<br>位置：香港街道<br>落雨天路面濕滑，煞車距離會加長</div>
+<div id="joystick"><div id="stick"></div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// 場景、相機、渲染器
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// 日景香港街道背景圖（免費可商用）
+const texLoader = new THREE.TextureLoader();
+scene.background = texLoader.load('https://images.unsplash.com/photo-1536599018102-9f8031c10b23?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+
+// 燈光
+const light = new THREE.DirectionalLight(0xffffff, 1.2);
+light.position.set(5,10,5);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+
+// 路面
+const roadGeo = new THREE.PlaneGeometry(20,200);
+const roadMat = new THREE.MeshStandardMaterial({color:0x333333, roughness:0.9});
+const road = new THREE.Mesh(roadGeo, roadMat);
+road.rotation.x = -Math.PI / 2;
+road.position.y = -0.5;
+scene.add(road);
+
+// 載入香港的士🚕 GLB模型（免費可商用）
+let taxi;
+const loader = new GLTFLoader();
+loader.load('https://vazxmixjsiawhamofees.supabase.co/storage/v1/object/public/models/taxi/model.gltf', (gltf)=>{
+  taxi = gltf.scene;
+  taxi.scale.set(0.6,0.6,0.6);
+  taxi.position.y = -0.45;
+  scene.add(taxi);
+});
+
+camera.position.set(0,3,8);
+camera.lookAt(0,0,0);
+
+// 搖桿控制
+const joystick = document.getElementById('joystick');
+const stick = document.getElementById('stick');
+let joyX=0, joyY=0;
+let speed=0;
+const infoBox = document.getElementById('info');
+
+function updateStick(clientX,clientY){
+  const rect = joystick.getBoundingClientRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top + rect.height/2;
+  let dx = clientX - cx;
+  let dy = clientY - cy;
+  const maxR = rect.width/2;
+  const r = Math.sqrt(dx*dx+dy*dy);
+  if(r>maxR){dx = dx/r*maxR; dy=dy/r*maxR;}
+  stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  joyX = dx/maxR;
+  joyY = dy/maxR;
+}
+joystick.addEventListener('touchstart',e=>updateStick(e.touches[0].clientX,e.touches[0].clientY));
+joystick.addEventListener('touchmove',e=>updateStick(e.touches[0].clientX,e.touches[0].clientY));
+joystick.addEventListener('touchend',()=>{stick.style.transform='translate(-50%,-50%)';joyX=0;joyY=0;});
+
+// 動畫迴圈
+function animate(){
+  requestAnimationFrame(animate);
+  if(taxi){
+    speed = joyY * 60;
+    taxi.position.z -= speed * 0.01;
+    taxi.rotation.y = joyX * 0.4;
+    // 相機跟隨的士
+    camera.position.x = taxi.position.x;
+    camera.position.z = taxi.position.z + 7;
+    camera.lookAt(taxi.position.x, taxi.position.y, taxi.position.z);
+  }
+  infoBox.innerText = `速度：${Math.round(speed)} km\n位置：香港街道\n落雨天路面濕滑，煞車距離會加長`;
+  renderer.render(scene,camera);
+}
+animate();
+window.addEventListener('resize',()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+})
+</script>
+</body>
+</html>
